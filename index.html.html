@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Mattii - รับผลิตพรมพิมพ์ลาย</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    body { font-family: 'Kanit', sans-serif; padding: 20px; }
+    label { display: block; margin-top: 10px; }
+    canvas { border: 1px solid #ccc; margin-top: 20px; cursor: crosshair; }
+    .section { margin-bottom: 30px; }
+    .drawing-tools input, .drawing-tools select, .drawing-tools button { margin-right: 10px; margin-top: 5px; }
+    #price { font-size: 20px; font-weight: bold; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+<h1>Mattii - รับผลิตพรมดักฝุ่นพิมพ์ลาย</h1>
+
+<form id="carpetForm" class="section">
+  <label>กว้าง (ซม.): <input type="number" id="length" value="120"></label>
+  <label>ยาว (ซม.): <input type="number" id="width" value="80"></label>
+  <label>สีพื้นหลัง: <input type="color" id="bgColor" value="#ffffff"></label>
+  <label>ข้อความบนพรม: <input type="text" id="text" value="ยินดีต้อนรับ"></label>
+  <label>ฟอนต์:
+    <select id="font">
+      <option value="Arial">Arial</option>
+      <option value="Tahoma">Tahoma</option>
+      <option value="Kanit">Kanit</option>
+    </select>
+  </label>
+  <label>ขนาดตัวอักษร: <input type="number" id="fontSize" value="24"></label>
+  <label>สีข้อความ: <input type="color" id="textColor" value="#000000"></label>
+  <label>แนบรูปภาพ: <input type="file" id="imageUpload" accept="image/*"></label>
+  <label>ปรับขนาดรูปภาพ: <input type="range" id="imageSizeSlider" min="50" max="300" value="100"></label>
+</form>
+
+<div class="drawing-tools">
+  <label>ขนาดเส้นดินสอ: <input type="range" id="penSize" min="1" max="10" value="3"></label>
+  <label>สีดินสอ: <input type="color" id="penColor" value="#ff0000"></label>
+  <button type="button" id="toggleDrawing">เปิด/ปิด เครื่องมือวาด</button>
+  <button type="button" id="toggleEraser">เปิด ยางลบ</button>
+  <button type="button" id="clearDrawing">ลบการวาดทั้งหมด</button>
+</div>
+
+<canvas id="previewCanvas" width="800" height="600"></canvas>
+<div id="price">ราคารวม: - บาท</div>
+<button id="downloadPDF">📄 ดาวน์โหลด PDF สรุปบรีฟ</button>
+
+<script>
+  const canvas = document.getElementById('previewCanvas');
+  const ctx = canvas.getContext('2d');
+
+  let isDrawingEnabled = false;
+  let penMode = 'draw';
+  let dragging = null;
+  let offsetX = 0, offsetY = 0;
+  let isDrawing = false;
+  let lastX = 0, lastY = 0;
+
+  const state = {
+    text: { content: 'ยินดีต้อนรับ', x: 100, y: 100, fontSize: 24, font: 'Arial', color: '#000000' },
+    image: { img: null, x: 0, y: 0, width: 100, height: 100 },
+    drawing: []
+  };
+
+  function updateStateFromForm() {
+    state.text.content = document.getElementById('text').value;
+    state.text.font = document.getElementById('font').value;
+    state.text.fontSize = parseInt(document.getElementById('fontSize').value);
+    state.text.color = document.getElementById('textColor').value;
+  }
+
+  function redrawCanvas() {
+    const bgColor = document.getElementById('bgColor').value;
+    const width = parseInt(document.getElementById('width').value);
+    const height = parseInt(document.getElementById('length').value);
+
+    canvas.width = width * 4;
+    canvas.height = height * 4;
+
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = state.text.color;
+    ctx.font = `${state.text.fontSize * 4}px ${state.text.font}`;
+    ctx.fillText(state.text.content, state.text.x, state.text.y);
+
+    if (state.image.img) {
+      ctx.drawImage(state.image.img, state.image.x, state.image.y, state.image.width, state.image.height);
+    }
+
+    state.drawing.forEach(line => {
+      ctx.beginPath();
+      ctx.moveTo(line.startX, line.startY);
+      ctx.lineTo(line.endX, line.endY);
+      ctx.strokeStyle = line.color;
+      ctx.lineWidth = line.size;
+      ctx.stroke();
+    });
+
+    const area = (width * height) / 10000;
+    const price = area * 1500;
+    document.getElementById('price').innerText = `ราคารวม: ${price.toFixed(2)} บาท`;
+  }
+
+  document.querySelectorAll('#carpetForm input, #carpetForm select').forEach(el => {
+    el.addEventListener('input', () => {
+      updateStateFromForm();
+      if (el.id === 'imageSizeSlider') {
+        if (state.image.img) {
+          const size = parseInt(el.value);
+          state.image.width = size;
+          state.image.height = size;
+        }
+      }
+      redrawCanvas();
+    });
+  });
+
+  canvas.addEventListener('mousedown', e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+
+    ctx.font = `${state.text.fontSize * 4}px ${state.text.font}`;
+    const textWidth = ctx.measureText(state.text.content).width;
+    const textHeight = state.text.fontSize * 4;
+
+    if (x >= state.text.x && x <= state.text.x + textWidth &&
+        y <= state.text.y && y >= state.text.y - textHeight) {
+      dragging = 'text';
+      offsetX = x - state.text.x;
+      offsetY = y - state.text.y;
+    } else if (state.image.img && x >= state.image.x && x <= state.image.x + state.image.width &&
+               y >= state.image.y && y <= state.image.y + state.image.height) {
+      dragging = 'image';
+      offsetX = x - state.image.x;
+      offsetY = y - state.image.y;
+    } else if (isDrawingEnabled) {
+      isDrawing = true;
+      lastX = x;
+      lastY = y;
+    }
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    if (!dragging && !isDrawing) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+
+    if (dragging === 'text') {
+      state.text.x = x - offsetX;
+      state.text.y = y - offsetY;
+    } else if (dragging === 'image') {
+      state.image.x = x - offsetX;
+      state.image.y = y - offsetY;
+    } else if (isDrawing) {
+      if (penMode === 'draw') {
+        state.drawing.push({
+          startX: lastX, startY: lastY, endX: x, endY: y,
+          color: document.getElementById('penColor').value,
+          size: parseInt(document.getElementById('penSize').value)
+        });
+      } else if (penMode === 'erase') {
+        const radius = 10;
+        state.drawing = state.drawing.filter(line => {
+          const distStart = Math.hypot(line.startX - x, line.startY - y);
+          const distEnd = Math.hypot(line.endX - x, line.endY - y);
+          return distStart > radius && distEnd > radius;
+        });
+      }
+      lastX = x;
+      lastY = y;
+    }
+
+    redrawCanvas();
+  });
+
+  canvas.addEventListener('mouseup', () => {
+    dragging = null;
+    isDrawing = false;
+  });
+
+  document.getElementById('imageUpload').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      const img = new Image();
+      img.onload = function() {
+        state.image.img = img;
+        state.image.x = 0;
+        state.image.y = 0;
+        state.image.width = parseInt(document.getElementById('imageSizeSlider').value);
+        state.image.height = state.image.width;
+        redrawCanvas();
+      };
+      img.src = evt.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById('downloadPDF').addEventListener('click', () => {
+      html2canvas(canvas).then(canvasImage => {
+        const imgData = canvasImage.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        pdf.setFont('Sarabun', 'normal');
+        pdf.setFontSize(18);
+        pdf.text("Mattii - รับผลิตพรมดักฝุ่นพิมพ์ลาย", 10, 20);
+        pdf.addImage(imgData, 'PNG', 10, 30, 190, 100);
+
+        const width = document.getElementById('width').value;
+        const length = document.getElementById('length').value;
+        const bgColor = document.getElementById('bgColor').value;
+        const text = document.getElementById('text').value;
+        const font = document.getElementById('font').value;
+        const fontSize = document.getElementById('fontSize').value;
+        const textColor = document.getElementById('textColor').value;
+        const area = (width * length) / 10000;
+        const price = area * 1500;
+
+        pdf.setFontSize(12);
+        pdf.text(`ขนาดพรม: ${width} x ${length} ซม.`, 10, 140);
+        pdf.text(`สีพื้นหลัง: ${bgColor}`, 10, 150);
+        pdf.text(`ข้อความ: "${text}"`, 10, 160);
+        pdf.text(`ฟอนต์: ${font}, ขนาด: ${fontSize}, สีข้อความ: ${textColor}`, 10, 170);
+        pdf.setFontSize(14);
+        pdf.text(`ราคารวม: ${price.toFixed(2)} บาท`, 10, 185);
+
+        pdf.save("Mattii-Carpet-Brief.pdf");
+      });
+    });
+
+    document.getElementById('clearDrawing').addEventListener('click', () => {
+      state.drawing = [];
+      redrawCanvas();
+    });
+
+    document.getElementById('toggleDraw').addEventListener('click', () => {
+      drawingEnabled = !drawingEnabled;
+      document.getElementById('toggleDraw').innerText = drawingEnabled ? 'ปิดโหมดวาด' : 'เปิดโหมดวาด';
+    });
+
+    document.getElementById('eraser').addEventListener('click', () => {
+      usingEraser = !usingEraser;
+      document.getElementById('eraser').innerText = usingEraser ? 'ใช้ดินสอ' : 'ยางลบ';
+    });
+
+    updateStateFromForm();
+    redrawCanvas();
+  </script>
+</body>
+</html>
