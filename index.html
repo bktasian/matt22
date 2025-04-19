@@ -19,8 +19,8 @@
 <h1>Mattii - รับผลิตพรมดักฝุ่นพิมพ์ลาย</h1>
 
 <form id="carpetForm" class="section">
-  <label>กว้าง (ซม.): <input type="number" id="length" value="120"></label>
-  <label>ยาว (ซม.): <input type="number" id="width" value="80"></label>
+  <label>กว้าง (ซม.): <input type="number" id="length" value="40"></label>
+  <label>ยาว (ซม.): <input type="number" id="width" value="120"></label>
   <label>สีพื้นหลัง: <input type="color" id="bgColor" value="#ffffff"></label>
   <label>ข้อความบนพรม: <input type="text" id="text" value="ยินดีต้อนรับ"></label>
   <label>ฟอนต์:
@@ -219,7 +219,7 @@
         const fontSize = document.getElementById('fontSize').value;
         const textColor = document.getElementById('textColor').value;
         const area = (width * length) / 10000;
-        const price = area * 1500;
+        const price = area * 1996;
 
         pdf.setFontSize(12);
         pdf.text(`ขนาดพรม: ${width} x ${length} ซม.`, 10, 140);
